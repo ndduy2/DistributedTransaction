@@ -1,0 +1,4 @@
+Slide 1: Microservice
+	Đặc điểm nổi bật của MSA là các service chạy động lập với nhau.
+	Tuy nhiên là 1 hệ thống, thì các service vẫn cần giao tiếp với nhau
+	
