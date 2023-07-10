@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RestaurantService.Messing;
+using RestaurantService.Service;
 
 namespace RestaurantService;
 class Program
@@ -17,14 +18,15 @@ class Program
                .Build();
 
         builder.Services.AddSingleton<Producer>();
+        builder.Services.AddSingleton<IInventoryService, InventoryService>();
+        builder.Services.AddSingleton<IRestaurantLogService, RestaurantLogService>();
 
         builder.Services.AddSingleton<RestaurantConsumer>();
 
         var app = builder.Build();
         RestaurantConsumer consumer = app.Services.GetService<RestaurantConsumer>();
         consumer.ReadMessage();
-        
+
         app.Run();
-        Console.ReadLine();
     }
 }

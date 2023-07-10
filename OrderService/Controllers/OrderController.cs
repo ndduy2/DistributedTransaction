@@ -33,7 +33,9 @@ public class OrderController : ControllerBase
             {
                 Id = newOrder.Id,
                 OrderBy = newOrder.OrderBy,
-                Amount = newOrder.Amount
+                Product = newOrder.Product,
+                Quantity = newOrder.Quantity,
+                TotalMoney = newOrder.TotalMoney,
             };
             var message = JsonConvert.SerializeObject(createOrderMessage);
             await _producer.Publish("ORDER_CREATED", message);

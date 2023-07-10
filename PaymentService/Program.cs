@@ -20,6 +20,7 @@ class Program
         builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddSingleton<Producer>();
         builder.Services.AddSingleton<IAccountBalanceService, PaymentService.Service.AccountBalanceService>();
+        builder.Services.AddSingleton<IPaymentLogService, PaymentService.Service.PaymentLogService>();
 
         builder.Services.AddSingleton<PaymentConsumer>();
 
@@ -28,6 +29,5 @@ class Program
         consumer.ReadMessage();
         
         app.Run();
-        Console.ReadLine();
     }
 }

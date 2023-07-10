@@ -24,6 +24,7 @@ public class OrderService : IOrderService
                 cmd.Connection = connection;
                 cmd.CommandText = $"SELECT * FROM public.order WHERE id=@id";
                 cmd.Parameters.AddWithValue("id", orderId);
+                cmd.Prepare();
                 NpgsqlDataReader reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
@@ -31,7 +32,9 @@ public class OrderService : IOrderService
                     {
                         Id = (int)reader["id"],
                         OrderBy = reader["order_by"] as string,
-                        Amount = (int)reader["amount"],
+                        Product = reader["product"] as string,
+                        Quantity = (int)reader["quantity"],
+                        TotalMoney = (int)reader["total_money"],
                         Status = reader["status"] as string,
                     });
                 }
@@ -41,6 +44,7 @@ public class OrderService : IOrderService
         }
         catch (System.Exception ex)
         {
+            Console.WriteLine($"Ex: {ex.Message} \n {ex.StackTrace}");
             return null;
         }
     }
@@ -54,10 +58,13 @@ public class OrderService : IOrderService
             {
                 var cmd = new NpgsqlCommand();
                 cmd.Connection = connection;
-                cmd.CommandText = $"INSERT INTO public.order (order_by, amount, status) VALUES (@orderBy, @amount, @status) RETURNING id;";
-                cmd.Parameters.AddWithValue("orderBy", order.OrderBy);
-                cmd.Parameters.AddWithValue("amount", order.Amount);
+                cmd.CommandText = $"INSERT INTO public.order (order_by, product, quantity, total_money, status) VALUES (@order_by, @product, @quantity, @total_money, @status) RETURNING id;";
+                cmd.Parameters.AddWithValue("order_by", order.OrderBy);
+                cmd.Parameters.AddWithValue("product", order.Product);
+                cmd.Parameters.AddWithValue("quantity", order.Quantity);
+                cmd.Parameters.AddWithValue("total_money", order.TotalMoney);
                 cmd.Parameters.AddWithValue("status", "CREATED");
+                cmd.Prepare();
                 result = (int)cmd.ExecuteScalar();
             }
 
@@ -65,6 +72,7 @@ public class OrderService : IOrderService
         }
         catch (System.Exception ex)
         {
+            Console.WriteLine($"Ex: {ex.Message} \n {ex.StackTrace}");
             return 0;
         }
     }
@@ -80,6 +88,7 @@ public class OrderService : IOrderService
                 cmd.CommandText = $"UPDATE public.order SET status = @staus WHERE id=@id";
                 cmd.Parameters.AddWithValue("id", orderId);
                 cmd.Parameters.AddWithValue("staus", status);
+                cmd.Prepare();
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -87,6 +96,7 @@ public class OrderService : IOrderService
         }
         catch (System.Exception ex)
         {
+            Console.WriteLine($"Ex: {ex.Message} \n {ex.StackTrace}");
             return 0;
         }
     }
@@ -101,6 +111,7 @@ public class OrderService : IOrderService
                 cmd.Connection = connection;
                 cmd.CommandText = $"DELETE FROM public.order WHERE id=@id";
                 cmd.Parameters.AddWithValue("id", orderId);
+                cmd.Prepare();
                 await cmd.ExecuteNonQueryAsync();
             }
 
@@ -108,6 +119,7 @@ public class OrderService : IOrderService
         }
         catch (System.Exception ex)
         {
+            Console.WriteLine($"Ex: {ex.Message} \n {ex.StackTrace}");
             return 0;
         }
     }

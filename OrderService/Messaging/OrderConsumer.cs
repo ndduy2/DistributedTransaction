@@ -62,7 +62,12 @@ public class OrderConsumer : BackgroundService
                             {
                                 var message = consumeResult.Message.Value;
                                 var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
-                                await _orderService.UpdateOrder(createOrderMessage.Id, "CANCELED_RESTAURANT");
+                                var order = await _orderService.GetOneById(createOrderMessage.Id);
+                                //nếu đã bị hủy bởi không tìm thấy vận chuyển thì không cần hủy lại bởi nhà hàng khi không có hàng
+                                if (order.Status != "CANCELED_DELIVERY")
+                                {
+                                    await _orderService.UpdateOrder(createOrderMessage.Id, "CANCELED_RESTAURANT");
+                                }
                                 break;
                             }
                         case "DELIVERY_DONE":
@@ -76,7 +81,12 @@ public class OrderConsumer : BackgroundService
                             {
                                 var message = consumeResult.Message.Value;
                                 var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
-                                await _orderService.UpdateOrder(createOrderMessage.Id, "CANCELED_DELIVERY");
+                                var order = await _orderService.GetOneById(createOrderMessage.Id);
+                                //nếu đã bị hủy bởi nhà hàng thì không cần hủy lại bởi delivery khi không có shipper
+                                if (order.Status != "CANCELED_RESTAURANT")
+                                {
+                                    await _orderService.UpdateOrder(createOrderMessage.Id, "CANCELED_DELIVERY");
+                                }
                                 break;
                             }
                         default:
