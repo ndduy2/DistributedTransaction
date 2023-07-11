@@ -25,7 +25,7 @@ public class DeliveryConsumer
         };
 
         consumer = new ConsumerBuilder<Ignore, string>(consumerConfig).Build();
-        consumer.Subscribe(new string[] { "PAYMENT_SUCCESSED", "RESTAURANT_DONE" });
+        consumer.Subscribe(new string[] { "PAYMENT_SUCCESSED", "RESTAURANT_FAILED", "RESTAURANT_DONE" });
     }
 
     public async void ReadMessage()
@@ -79,7 +79,18 @@ public class DeliveryConsumer
                             }
                             break;
                         }
+                    case "RESTAURANT_FAILED":
+                        {
+                            var message = consumeResult.Message.Value;
+                            var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
 
+                            var shipping = await _shippingService.GetByOrderId(createOrderMessage.Id);
+                            if (shipping != null)
+                            {
+                                await _shippingService.UpdateShipper(createOrderMessage.Id, string.Empty);
+                            }
+                            break;
+                        }
                     case "RESTAURANT_DONE":
                         {
                             var message = consumeResult.Message.Value;
