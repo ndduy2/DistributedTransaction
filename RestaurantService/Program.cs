@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Common;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RestaurantService.Messing;
@@ -18,8 +19,11 @@ class Program
                .Build();
 
         builder.Services.AddSingleton<Producer>();
+        builder.Services.AddSingleton<RetryUtil>();
         builder.Services.AddSingleton<IInventoryService, InventoryService>();
-        builder.Services.AddSingleton<IRestaurantLogService, RestaurantLogService>();
+        builder.Services.AddSingleton<IEventService, EventService>();
+        builder.Services.AddSingleton<ITicketService, TicketService>();
+        builder.Services.AddHostedService<RestaurantProducer>();
 
         builder.Services.AddSingleton<RestaurantConsumer>();
 
@@ -28,5 +32,6 @@ class Program
         consumer.ReadMessage();
 
         app.Run();
+        Console.ReadLine();
     }
 }

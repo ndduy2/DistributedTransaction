@@ -8,7 +8,7 @@
             "name": "OrderService",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            "preLaunchTask": "buildOrder",
             // If you have changed target frameworks, make sure to update the program path.
             "program": "${workspaceFolder}/OrderService/bin/Debug/net7.0/OrderService.dll",
             "args": [],

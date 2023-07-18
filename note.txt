@@ -1,4 +1,84 @@
-Slide 1: Microservice
-	Đặc điểm nổi bật của MSA là các service chạy động lập với nhau.
-	Tuy nhiên là 1 hệ thống, thì các service vẫn cần giao tiếp với nhau
-	
+Compensable transaction: những transaction nên được thực hiện đầu tiên và có thể rollback nếu lỗi xảy ra (optional).
+Transaction thực hiện việc rollback được gọi là compensating transaction. Cần lưu ý kĩ tính chất có thể rollback, tức là không chắc chắn 100% transaction này executed succeed.
+
+Pivot transaction: nó là go/no-go point trong SAGA. Nếu transaction fail, thực hiện compensating transaction cho các transaction đã succeed trước đó.
+Ngược lại nếu transaction success, đi tiếp cho đến khi hoàn thành.
+
+Retriable transaction: những transaction cần thực hiện cuối cùng và chắc chắn 100% executed succeed.
+Nếu lỗi là yếu tố khách quan như crash app, out of memory, lost connection... có thể retry đến khi nào thành công.
+
+
+Isolation: Dữ liệu của các transaction độc lập với nhau.
+
+Trên 1 db thì các db thường sẽ lock bản ghi lại trước khi transaction commit => transaction khác sẽ phải đợi
+
+Tuy nhiên khi ứng dụng xây dựng theo kiến trúc MSA thì các db là độc lập và các local transaction được commit rới rạc
+=> dẫn tới hệ quả là:
+1. Lost update:  flow B ghi đè dữ liệu của flow A
+ví dụ: 
+Khách hàng đặt đơn hàng và đang đến bước tìm shipper (đã thành toán)
+Thì khách hàng hủy đơn. => cập nhật đơn hàng Cancel => Hoàn tiền
+1 lúc sau bộ phận vận chuyển cũng tìm thấy ship => Cập nhật đơn hàng đã tìm thấy shipper => vẫn chuyển hàng cho khách
+
+2. Dirty read: flow B đọc dữ liệu chưa mới được commit ở local mà toàn bộ flow A chưa commit. nên có thể flow A rollback
+Ví dụ 
+Khách hàng A đặt hàng thì ở bước check tồn kho. đã trừ số lượng trong kho
+Đồng thời khách hàng B khác đặt tiếp thì hàng trong kho đã hết => thông báo hết hàng
+Lúc này thì đơn của khách A đến bước thanh toán và không đủ tiền => hoàn lại hàng về kho
+=> trong kho vẫn còn hàng mà trước đó khách B lại được thông báo hết hàng
+
+Giải pháp
+Semantic lock: trên mỗi bản ghi thêm 1 cột cờ đánh dấu là locking => các flow khác sẽ phải đợi đến khi unlock. khi qua được Pivot transaction hoặc khi toàn bộ transaction commit thì unlock
+
+Pessimistic view: Cần hiểu rõ các step/transaction của SAGA flow để sắp xếp theo trật tự ổn áp nhất để giảm sự ảnh hưởng của dirty read, hoặc để tối ưu quá trình rollback SAGA flow nếu có lỗi xảy ra.
+ở ví dụ hủy đơn thì cần gọi đến service delivery để hủy tìm shipper trước, nếu thành công thì mới hoàn tiền và hủy đơn hàng
+
+Reread value: ở ví dụ hủy đơn thì trước khi cập nhật trạng thái tìm thấy shipper ta đọc lại trạng thái đơn hàng xem đã bị Cancel chưa thì mới update.
+
+ORDER
+select * from public.order
+
+--delete from public.order
+
+select * from public.event
+
+--delete from public.event
+
+select * from public.order_history order by order_id desc, id asc
+
+--delete from public.order_history
+
+
+INVENTORY
+select * from public."event"
+
+--delete from public.event
+
+select * from public.inventory
+
+--delete from public.inventory
+--insert into public.inventory(product, stock, status) values ('BO', 100, 'AVAIABLE'),('GA', 100, 'AVAIABLE'),('HAISAN', 100, 'AVAIABLE')
+
+select * from public.ticket
+
+--delete from public.ticket
+
+WALLET
+select * from public."event"
+
+--delete from public.event
+
+select * from public.account_balance
+
+--delete from public.account_balance
+--insert into public.account_balance(account, balance) values ('DUYND', 1000000),('TUNT', 1000000)
+
+select * from public.payment
+
+--delete from public.payment
+
+
+DELIVERY
+select * from public."event"
+
+--delete from public.event

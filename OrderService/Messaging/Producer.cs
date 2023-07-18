@@ -12,7 +12,7 @@ public class Producer
         };
     }
 
-    public async Task Publish(string topic, string message)
+    public async Task<bool> Publish(string topic, string message)
     {
 
         using (var p = new ProducerBuilder<Null, string>(producerConfig).Build())
@@ -21,6 +21,8 @@ public class Producer
 
             // wait for up to 10 seconds for any inflight messages to be delivered.
             p.Flush(TimeSpan.FromSeconds(10));
+
+            return result.Status == PersistenceStatus.Persisted;
         }
     }
 }

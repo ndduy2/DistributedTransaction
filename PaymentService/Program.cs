@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Common;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using PaymentService.Messing;
@@ -19,15 +20,19 @@ class Program
 
         builder.Services.AddSingleton<IConfiguration>(configuration);
         builder.Services.AddSingleton<Producer>();
+        builder.Services.AddSingleton<RetryUtil>();
         builder.Services.AddSingleton<IAccountBalanceService, PaymentService.Service.AccountBalanceService>();
-        builder.Services.AddSingleton<IPaymentLogService, PaymentService.Service.PaymentLogService>();
+        builder.Services.AddSingleton<IEventService, EventService>();
+        builder.Services.AddSingleton<IPaymentService, PaymentService.Service.PaymentService>();
+        builder.Services.AddHostedService<PaymentProducer>();
 
         builder.Services.AddSingleton<PaymentConsumer>();
 
         var app = builder.Build();
         PaymentConsumer consumer = app.Services.GetService<PaymentConsumer>();
         consumer.ReadMessage();
-        
+
         app.Run();
+        Console.ReadLine();
     }
 }

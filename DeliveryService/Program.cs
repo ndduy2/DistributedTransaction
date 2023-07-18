@@ -2,8 +2,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using DeliveryService.Messing;
-using DeliveryService.Util;
 using DeliveryService.Service;
+using Common;
 
 namespace DeliveryService;
 class Program
@@ -20,7 +20,9 @@ class Program
 
         builder.Services.AddSingleton<Producer>();
         builder.Services.AddSingleton<RetryUtil>();
-        builder.Services.AddSingleton<IShippingService, ShippingService>();
+        builder.Services.AddSingleton<IEventService, EventService>();
+        builder.Services.AddSingleton<IShipInfoService, ShipInfoService>();
+        builder.Services.AddHostedService<DeliveryProducer>();
 
         builder.Services.AddSingleton<DeliveryConsumer>();
 
@@ -29,5 +31,6 @@ class Program
         consumer.ReadMessage();
 
         app.Run();
+        Console.ReadLine();
     }
 }

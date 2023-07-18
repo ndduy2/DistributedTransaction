@@ -6,4 +6,5 @@ public class CreateOrderMessage
     public string Product { get; set; }
     public int Quantity { get; set; }
     public int TotalMoney { get; set; }
+    public string Shipper { get; set; }
 }

@@ -1,7 +1,10 @@
 using System.Data;
+using Common;
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Npgsql;
 using RestaurantService.Domain;
+using RestaurantService.Messing;
 
 namespace RestaurantService.Service;
 public class InventoryService : IInventoryService
@@ -10,7 +13,7 @@ public class InventoryService : IInventoryService
 
     public InventoryService(IConfiguration configuration)
     {
-        var dataSourceBuilder = new NpgsqlDataSourceBuilder(configuration.GetConnectionString("Orderdb"));
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(configuration.GetConnectionString("DB"));
         _ds = dataSourceBuilder.Build();
     }
 
@@ -33,6 +36,7 @@ public class InventoryService : IInventoryService
                     {
                         Product = reader["product"] as string,
                         Stock = (int)reader["stock"],
+                        Status = reader["status"] as string,
                     });
                 }
 
@@ -47,34 +51,71 @@ public class InventoryService : IInventoryService
         }
     }
 
-    public async Task UpdateStock(string product, int stock, int? orderId = null)
+    public async Task UpdateStock(CreateOrderMessage model, int stock, string status = CoreConstant.InventoryStatus.LOCKING)
+    {
+        NpgsqlTransaction transaction = null;
+        try
+        {
+            using var connection = _ds.OpenConnection();
+            {
+                transaction = connection.BeginTransaction();
+                var cmd1 = new NpgsqlCommand();
+                cmd1.Connection = connection;
+                cmd1.Transaction = transaction;
+                cmd1.CommandText = $"UPDATE public.inventory SET stock= @stock, status= @status WHERE product= @product";
+                cmd1.Parameters.AddWithValue("product", model.Product);
+                cmd1.Parameters.AddWithValue("stock", stock);
+                cmd1.Parameters.AddWithValue("status", status);
+                cmd1.Prepare();
+                await cmd1.ExecuteNonQueryAsync();
+
+                var cmd2 = new NpgsqlCommand();
+                cmd2.Connection = connection;
+                cmd2.Transaction = transaction;
+                cmd2.CommandText = $"INSERT INTO public.ticket (order_id, status) VALUES (@order_id, @status)";
+                cmd2.Parameters.AddWithValue("order_id", model.Id);
+                cmd2.Parameters.AddWithValue("status", CoreConstant.TicketStatus.CREATE_PENDING);
+                cmd2.Prepare();
+                await cmd2.ExecuteNonQueryAsync();
+
+                var cmd3 = new NpgsqlCommand();
+                cmd3.Connection = connection;
+                cmd3.Transaction = transaction;
+                cmd3.CommandText = $"INSERT INTO public.event (type, data, status) VALUES (@type, @data, @status)";
+                cmd3.Parameters.AddWithValue("type", CoreConstant.Topic.TICKET_CREATE_PENDING);
+                cmd3.Parameters.AddWithValue("data", JsonConvert.SerializeObject(model));
+                cmd3.Parameters.AddWithValue("status", CoreConstant.EventStatus.NEW);
+                cmd3.Prepare();
+                await cmd3.ExecuteNonQueryAsync();
+
+                await transaction.CommitAsync();
+            }
+
+            return;
+        }
+        catch (System.Exception ex)
+        {
+            if (transaction != null) transaction.Rollback();
+            Console.WriteLine($"Ex: {ex.Message} \n {ex.StackTrace}");
+            return;
+        }
+    }
+
+    public async Task RevertStock(string product, int stock)
     {
         try
         {
             using var connection = _ds.OpenConnection();
             {
-                var transaction = connection.BeginTransaction();
                 var cmd1 = new NpgsqlCommand();
                 cmd1.Connection = connection;
-                cmd1.CommandText = $"UPDATE public.inventory SET stock = @stock WHERE product=@product";
+                cmd1.CommandText = $"UPDATE public.inventory SET stock= @stock, status= @status WHERE product= @product";
                 cmd1.Parameters.AddWithValue("product", product);
                 cmd1.Parameters.AddWithValue("stock", stock);
+                cmd1.Parameters.AddWithValue("status", CoreConstant.InventoryStatus.AVAIABLE);
                 cmd1.Prepare();
                 await cmd1.ExecuteNonQueryAsync();
 
-                if (orderId != null)
-                {
-                    var cmd2 = new NpgsqlCommand();
-                    cmd2.Connection = connection;
-                    cmd2.Transaction = transaction;
-                    cmd2.CommandText = $"INSERT INTO public.restaurant_log (order_id, is_cooking) VALUES (@order_id, @is_cooking)";
-                    cmd2.Parameters.AddWithValue("order_id", orderId);
-                    cmd2.Parameters.AddWithValue("is_cooking", true);
-                    cmd2.Prepare();
-                    await cmd2.ExecuteNonQueryAsync();
-                }
-
-                await transaction.CommitAsync();
             }
 
             return;

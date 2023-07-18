@@ -1,7 +1,7 @@
+using Common;
 using Confluent.Kafka;
 using DeliveryService.Domain;
 using DeliveryService.Service;
-using DeliveryService.Util;
 using Newtonsoft.Json;
 
 namespace DeliveryService.Messing;
@@ -9,14 +9,16 @@ public class DeliveryConsumer
 {
     private readonly Producer _producer;
     private readonly RetryUtil _retryUtil;
-    private readonly IShippingService _shippingService;
+    private readonly IShipInfoService _shippingService;
+    private readonly IEventService _eventService;
     protected readonly ConsumerConfig consumerConfig;
     protected readonly IConsumer<Ignore, string> consumer;
-    public DeliveryConsumer(Producer producer, RetryUtil retryUtil, IShippingService shippingService)
+    public DeliveryConsumer(Producer producer, RetryUtil retryUtil, IShipInfoService shippingService, IEventService eventService)
     {
         _producer = producer;
-        _shippingService = shippingService;
         _retryUtil = retryUtil;
+        _shippingService = shippingService;
+        _eventService = eventService;
         consumerConfig = new ConsumerConfig
         {
             BootstrapServers = "localhost:9092",
@@ -25,7 +27,7 @@ public class DeliveryConsumer
         };
 
         consumer = new ConsumerBuilder<Ignore, string>(consumerConfig).Build();
-        consumer.Subscribe(new string[] { "PAYMENT_SUCCESSED", "RESTAURANT_FAILED", "RESTAURANT_DONE" });
+        consumer.Subscribe(new string[] { "PAYMENT_SUCCESS" });
     }
 
     public async void ReadMessage()
@@ -38,88 +40,21 @@ public class DeliveryConsumer
                 var topic = consumeResult.Topic;
                 switch (topic)
                 {
-                    case "PAYMENT_SUCCESSED":
+                    case CoreConstant.Topic.PAYMENT_SUCCESS:
                         {
                             var message = consumeResult.Message.Value;
-                            var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
-                            var shipping = await _shippingService.GetByOrderId(createOrderMessage.Id);
-                            if (shipping == null)
-                            {
-                                shipping = new Shipping()
-                                {
-                                    OrderId = createOrderMessage.Id,
-                                    Customer = createOrderMessage.OrderBy,
-                                    Shipper = string.Empty,
-                                    RestaurantStatus = string.Empty
-                                };
-
-                                await _shippingService.CreateShipping(shipping);
-                            }
-
-                            var shipper = string.Empty;
                             try
                             {
-                                shipper = await _retryUtil.Retry<string>(
-                                    () => _shippingService.FindShipper(createOrderMessage.TotalMoney), 3, 500);
+                                var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
+                                await _retryUtil.Retry(() => _shippingService.FindShipper(createOrderMessage), 5, 2000);
                             }
                             catch (System.Exception ex)
                             {
-                                await _producer.Publish("DELIVERY_FAILED", message);
+                                await _eventService.CreateEvent(new Event() { Type = CoreConstant.Topic.SHIPPER_NOT_FOUND, Data = message, Status = CoreConstant.EventStatus.NEW });
                             }
 
-                            if (!string.IsNullOrWhiteSpace(shipper))
-                            {
-                                await _shippingService.UpdateShipper(createOrderMessage.Id, shipper);
-                            }
-
-                            shipping = await _shippingService.GetByOrderId(createOrderMessage.Id);
-                            if (shipping != null && !string.IsNullOrWhiteSpace(shipping.Shipper) && !string.IsNullOrWhiteSpace(shipping.RestaurantStatus))
-                            {
-                                await _producer.Publish("DELIVERY_DONE", message);
-                            }
                             break;
                         }
-                    case "RESTAURANT_FAILED":
-                        {
-                            var message = consumeResult.Message.Value;
-                            var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
-
-                            var shipping = await _shippingService.GetByOrderId(createOrderMessage.Id);
-                            if (shipping != null)
-                            {
-                                await _shippingService.UpdateShipper(createOrderMessage.Id, string.Empty);
-                            }
-                            break;
-                        }
-                    case "RESTAURANT_DONE":
-                        {
-                            var message = consumeResult.Message.Value;
-                            var createOrderMessage = JsonConvert.DeserializeObject<CreateOrderMessage>(message);
-
-                            var shipping = await _shippingService.GetByOrderId(createOrderMessage.Id);
-                            if (shipping == null)
-                            {
-                                shipping = new Shipping()
-                                {
-                                    OrderId = createOrderMessage.Id,
-                                    Customer = createOrderMessage.OrderBy,
-                                    Shipper = string.Empty,
-                                    RestaurantStatus = string.Empty
-                                };
-
-                                await _shippingService.CreateShipping(shipping);
-                            }
-
-                            await _shippingService.UpdateRestaurantStatus(createOrderMessage.Id, "FOOD_DONE");
-
-                            shipping = await _shippingService.GetByOrderId(createOrderMessage.Id);
-                            if (shipping != null && !string.IsNullOrWhiteSpace(shipping.Shipper) && !string.IsNullOrWhiteSpace(shipping.RestaurantStatus))
-                            {
-                                await _producer.Publish("DELIVERY_DONE", message);
-                            }
-                            break;
-                        }
-
                     default:
                         break;
                 }
@@ -132,7 +67,6 @@ public class DeliveryConsumer
         }
         finally
         {
-            consumer.Close();
         }
     }
 
