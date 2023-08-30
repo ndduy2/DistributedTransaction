@@ -7,7 +7,6 @@ using System.Reflection;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddSingleton<Producer>();
 builder.Services.AddSingleton<RetryUtil>();
 builder.Services.AddSingleton<IOrderService, OrderService.Service.OrderService>();
