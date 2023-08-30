@@ -1,9 +1,8 @@
-using System.Reflection;
 using Common;
-using Microsoft.AspNetCore;
 using Microsoft.OpenApi.Models;
 using OrderService.Messing;
 using OrderService.Service;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
